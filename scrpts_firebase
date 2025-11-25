@@ -1,0 +1,11 @@
+// scripts/firebase-config.js
+// REEMPLAZA con tu configuración real (copia desde Firebase Console -> Web app)
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "XXXXXXXXXXXX",
+  appId: "1:XXXXXXXX:web:YYYYYYYYYYYY"
+};
+export default firebaseConfig;
