@@ -1,0 +1,32 @@
+// functions/index.js
+const functions = require('firebase-functions');
+const admin = require('firebase-admin');
+admin.initializeApp();
+
+// When a notification doc is created, send FCM to relevant tokens
+exports.onNotificationCreate = functions.firestore.document('notifications/{nid}').onCreate(async (snap, context) => {
+  const data = snap.data();
+  const message = data.message || '';
+  const type = data.type || 'general';
+
+  // Example: send to all student tokens
+  const tokensSnap = await admin.firestore().collection('fcmTokens').get();
+  const tokens = tokensSnap.docs.map(d=>d.data().token).filter(Boolean);
+
+  if(tokens.length === 0) {
+    await snap.ref.update({ sent: false, reason: 'no-tokens' });
+    return null;
+  }
+
+  const payload = {
+    notification: {
+      title: type === 'absence' ? 'Aviso de inasistencia' : 'Notificación EduTask',
+      body: message
+    },
+    data: { type }
+  };
+
+  const resp = await admin.messaging().sendToDevice(tokens, payload);
+  await snap.ref.update({ sent: true, sentAt: admin.firestore.FieldValue.serverTimestamp() });
+  return resp;
+});
