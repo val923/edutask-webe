@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EduTask - Plataforma escolar</title>
+  <link rel="stylesheet" href="styles/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">EduTask</div>
+    <nav>
+      <button id="btnViewHome" class="link">Inicio</button>
+      <button id="btnViewStudent" class="link">Alumno</button>
+      <button id="btnViewTeacher" class="link">Docente</button>
+      <button id="btnDocs" class="link">Documentos</button>
+    </nav>
+    <div id="authArea" class="auth-area">
+      <span id="userEmail" hidden></span>
+      <button id="btnSignOut" class="small" hidden>Salir</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Login / Register -->
+    <section id="viewHome" class="card view">
+      <h2>Bienvenida - EduTask</h2>
+      <p>Plataforma para gestión de rúbricas, calificaciones y notificaciones.</p>
+      <div class="auth-card">
+        <input id="email" type="email" placeholder="Correo" />
+        <input id="password" type="password" placeholder="Contraseña" />
+        <div class="row">
+          <button id="btnLogin">Iniciar sesión</button>
+          <button id="btnOpenRegister" class="secondary">Crear cuenta</button>
+        </div>
+        <p id="msg" class="msg"></p>
+      </div>
+      <hr/>
+      <h3>Documentos</h3>
+      <ul>
+        <li><a href="/mnt/data/DOC-20251124-WA0055..pdf" target="_blank">Documento 1 (PDF)</a></li>
+        <li><a href="/mnt/data/EQUIPO1_ETAPA2_ANÁLISIS CORREGIDO.pdf" target="_blank">Análisis (PDF)</a></li>
+        <li><a href="/mnt/data/Equipo #1 Etapa #3_Diseño.pdf" target="_blank">Diseño (PDF)</a></li>
+      </ul>
+    </section>
+
+    <!-- Student view -->
+    <section id="viewStudent" class="card view" hidden>
+      <h2>Panel del Alumno</h2>
+      <div>
+        <strong>Progreso:</strong> <span id="studentProgress">0%</span>
+      </div>
+      <div id="studentGrades" class="list"></div>
+      <h3>Entregas</h3>
+      <div id="submissionArea">
+        <input id="assignmentTitle" placeholder="Título de la entrega" />
+        <textarea id="assignmentFiles" placeholder="Descripción / enlaces"></textarea>
+        <button id="btnSubmit">Enviar entrega</button>
+      </div>
+      <div class="note">Las calificaciones se guardan en su cuenta y están disponibles sin conexión.</div>
+    </section>
+
+    <!-- Teacher view -->
+    <section id="viewTeacher" class="card view" hidden>
+      <h2>Panel del Docente</h2>
+      <div>
+        <h3>Crear rúbrica</h3>
+        <input id="rubricTitle" placeholder="Título de rúbrica" />
+        <textarea id="rubricDesc" placeholder="Descripción"></textarea>
+        <div id="criteriaList"></div>
+        <div class="row">
+          <button id="btnAddCriterion" class="small">Agregar criterio</button>
+          <button id="btnSaveRubric">Guardar rúbrica</button>
+        </div>
+      </div>
+
+      <hr/>
+      <div>
+        <h3>Enviar aviso de inasistencia</h3>
+        <textarea id="absenceMsg" placeholder="Mensaje de ausencia"></textarea>
+        <div class="row">
+          <button id="btnSendAbsence">Enviar aviso</button>
+        </div>
+        <div id="noticeResult"></div>
+      </div>
+
+      <hr/>
+      <div>
+        <h3>Ver entregas</h3>
+        <div id="submissionsList"></div>
+      </div>
+    </section>
+
+    <!-- Register modal (simple) -->
+    <section id="viewRegister" class="card view" hidden>
+      <h2>Crear cuenta</h2>
+      <select id="roleSelect"><option value="student">Alumno</option><option value="teacher">Docente</option></select>
+      <input id="reg_names" placeholder="Nombres (máx 630 chars)" />
+      <input id="reg_lastnames" placeholder="Apellidos (máx 600 chars)" />
+      <input id="reg_email" type="email" placeholder="Correo personal" />
+      <input id="reg_password" type="password" placeholder="Contraseña" />
+      <input id="reg_grade" placeholder="Grado (ej. primero)" />
+      <input id="reg_group" placeholder="Grupo (ej. I, II, III)" />
+      <div class="row"><button id="btnCreate">Crear</button><button id="btnCancelRegister" class="secondary">Cancelar</button></div>
+      <p id="regMsg" class="msg"></p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <small>© 2025 EduTask — Proyecto escolar</small>
+  </footer>
+
+  <script src="scripts/firebase-config.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
+  <script src="scripts/app.js"></script>
+</body>
+</html>
