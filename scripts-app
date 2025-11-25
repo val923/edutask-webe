@@ -1,0 +1,194 @@
+// scripts/app.js
+import firebaseConfig from './firebase-config.js';
+
+// Inicializar Firebase (compat para simplificar)
+const firebaseApp = firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const messaging = firebase.messaging();
+
+// Habilitar persistence (offline)
+db.enablePersistence?.().catch(err => {
+  console.warn('Persistence error', err);
+});
+
+// UI helpers
+const view = id => document.getElementById(id);
+const show = (id, v=true) => { view(id).hidden = !v; };
+const msgEl = view('msg');
+function showMsg(txt, err=false){ msgEl.textContent = txt; msgEl.style.color = err ? '#b00020' : '#006400'; }
+
+// Auth listeners
+auth.onAuthStateChanged(async user => {
+  if(user){
+    view('btnSignOut').hidden = false;
+    view('userEmail').textContent = user.email; view('userEmail').hidden = false;
+    // fetch profile role
+    const doc = await db.collection('users').doc(user.uid).get();
+    const role = doc.exists ? doc.data().role : 'student';
+    // show appropriate panel
+    show('viewHome', false);
+    if(role === 'teacher'){ show('viewTeacher', true); show('viewStudent', false); }
+    else { show('viewStudent', true); show('viewTeacher', false); }
+    initMessagingToken();
+    loadStudentData(user.uid, role);
+  } else {
+    // guest
+    show('viewHome', true); show('viewStudent', false); show('viewTeacher', false);
+    view('btnSignOut').hidden = true; view('userEmail').hidden = true;
+  }
+});
+
+// Login
+view('btnLogin').addEventListener('click', async () => {
+  const email = view('email').value.trim(); const password = view('password').value;
+  if(!email || !password){ showMsg('Correo y contraseña requeridos', true); return; }
+  try { await auth.signInWithEmailAndPassword(email, password); showMsg(''); }
+  catch(e){ showMsg('Error: '+e.message, true); }
+});
+
+// Sign out
+view('btnSignOut').addEventListener('click', ()=> auth.signOut());
+
+// Register flow
+view('btnOpenRegister').addEventListener('click', ()=> {
+  show('viewHome', false); show('viewRegister', true);
+});
+view('btnCancelRegister').addEventListener('click', ()=> { show('viewRegister', false); show('viewHome', true); });
+
+view('btnCreate').addEventListener('click', async ()=>{
+  const role = view('roleSelect').value;
+  const names = view('reg_names').value.trim();
+  const last = view('reg_lastnames').value.trim();
+  const email = view('reg_email').value.trim();
+  const password = view('reg_password').value;
+  const grade = view('reg_grade').value.trim();
+  // basic validations length
+  if(names.length>630 || last.length>600){ view('regMsg').textContent = 'Texto demasiado largo en nombres/apellidos'; return; }
+  if(!email || !password){ view('regMsg').textContent = 'Correo y contraseña requeridos'; return; }
+  try {
+    const cred = await auth.createUserWithEmailAndPassword(email, password);
+    const uid = cred.user.uid;
+    const profile = { role, names, last, email, grade, group: view('reg_group').value || '', createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+    await db.collection('users').doc(uid).set(profile);
+    view('regMsg').textContent = 'Usuario creado correctamente';
+    show('viewRegister', false); show('viewHome', true);
+  } catch(e){
+    view('regMsg').textContent = 'Error: ' + e.message;
+  }
+});
+
+// Teacher: add criterion
+view('btnAddCriterion').addEventListener('click', ()=>{
+  const list = view('criteriaList');
+  const idx = list.children.length;
+  const div = document.createElement('div');
+  div.innerHTML = `<input placeholder="Nombre criterio" id="crit_name_${idx}" /><input placeholder="Peso (0-100) ej: 20" id="crit_weight_${idx}" />`;
+  list.appendChild(div);
+});
+
+// Save rubric
+view('btnSaveRubric').addEventListener('click', async ()=>{
+  const title = view('rubricTitle').value.trim();
+  if(!title){ alert('Título requerido'); return; }
+  const desc = view('rubricDesc').value.trim();
+  const criteria = [];
+  for(let i=0;i<view('criteriaList').children.length;i++){
+    const name = view(`crit_name_${i}`).value.trim();
+    const weight = parseFloat(view(`crit_weight_${i}`).value) || 0;
+    criteria.push({ name, weight, description: '' });
+  }
+  // optional: check weights sum
+  const sum = criteria.reduce((s,c)=>s+(c.weight||0),0);
+  if(sum<=0){ if(!confirm('Los pesos suman 0. ¿Deseas guardar así?')) return; }
+  await db.collection('rubrics').add({ title, desc, criteria, createdAt: firebase.firestore.FieldValue.serverTimestamp(), createdBy: auth.currentUser.uid });
+  alert('Rúbrica guardada');
+});
+
+// Send absence notice -> create a document in /notifications for Cloud Function to pick up
+view('btnSendAbsence').addEventListener('click', async ()=>{
+  const msg = view('absenceMsg').value.trim();
+  if(!msg){ alert('Escribe un mensaje'); return; }
+  await db.collection('notifications').add({ fromId: auth.currentUser.uid, type:'absence', message: msg, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+  view('noticeResult').textContent = 'Aviso creado y en cola de envío.';
+});
+
+// Submit assignment (student)
+view('btnSubmit').addEventListener('click', async ()=>{
+  const title = view('assignmentTitle').value.trim();
+  const files = view('assignmentFiles').value.trim();
+  if(!title){ alert('Título requerido'); return; }
+  const doc = { assignmentTitle: title, files, studentId: auth.currentUser.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp(), totalPercent: null };
+  await db.collection('submissions').add(doc);
+  alert('Entrega enviada (guardada en la nube).');
+});
+
+// Load data for student
+async function loadStudentData(uid, role){
+  if(role==='student'){
+    // load submissions and calculate progress
+    db.collection('submissions').where('studentId','==',uid).onSnapshot(snap=>{
+      const grades = [];
+      snap.forEach(d=>grades.push(d.data()));
+      renderStudentGrades(grades);
+    });
+  } else {
+    // teacher: load submissions list
+    db.collection('submissions').onSnapshot(snap=>{
+      const out = [];
+      snap.forEach(d => out.push({id:d.id, ...d.data()}));
+      renderSubmissionsForTeacher(out);
+    });
+  }
+}
+
+// Render helpers
+function renderStudentGrades(arr){
+  const el = view('studentGrades'); el.innerHTML='';
+  let total=0, count=0;
+  arr.forEach(item=>{
+    const p = document.createElement('div');
+    const percent = item.totalPercent ?? 'Sin calificar';
+    p.textContent = `${item.assignmentTitle}: ${percent}`;
+    el.appendChild(p);
+    if(typeof item.totalPercent === 'number'){ total += item.totalPercent; count++; }
+  });
+  const prog = count? Math.round(total/count) : 0;
+  view('studentProgress').textContent = prog + '%';
+  // cache locally for offline viewing
+  localStorage.setItem('cached_submissions_' + (auth.currentUser?.uid||'guest'), JSON.stringify(arr));
+}
+
+// Render teacher view submissions
+function renderSubmissionsForTeacher(list){
+  const el = view('submissionsList'); el.innerHTML='';
+  list.forEach(it=>{
+    const div = document.createElement('div');
+    div.className = 'card';
+    div.innerHTML = `<div><strong>${it.assignmentTitle}</strong> - ${it.studentId}</div>
+      <div>Archivos: ${it.files || '-'}</div>
+      <div><input placeholder="Puntaje total %" id="score_${it.id}" /><button onclick="gradeSubmission('${it.id}')">Calificar</button></div>`;
+    el.appendChild(div);
+  });
+}
+
+// grading function available globally
+window.gradeSubmission = async function(id){
+  const input = document.getElementById('score_' + id);
+  const val = parseFloat(input.value);
+  if(Number.isNaN(val)){ alert('Ingresa un número'); return; }
+  await db.collection('submissions').doc(id).update({ totalPercent: val, gradedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  alert('Calificación guardada');
+};
+
+// Messaging (get token)
+async function initMessagingToken(){
+  try {
+    await messaging.requestPermission();
+    const token = await messaging.getToken({ vapidKey: 'YOUR_PUBLIC_VAPID_KEY' }); // reemplaza si usas VAPID
+    if(token){
+      // save token to user doc to send notifications
+      await db.collection('fcmTokens').doc(auth.currentUser.uid).set({ token, userId: auth.currentUser.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    }
+  } catch(e){ console.warn('FCM token error', e); }
+}
